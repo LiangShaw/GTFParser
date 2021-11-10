@@ -22,10 +22,13 @@ def get_args():
     ArgsParser.add_argument('-g','--gtf',
         help='provide a gtf file', required=True
     )
-    ArgsParser.add_argument('--promoter-range', default='-2000,0', help='setting promoter range manually. Default -2000,0 (5`->3` direction).')
-    ArgsParser.add_argument('--TTS-range', default='0,2000', help='setting terminal range manually. Default 0,2000 (5`->3` direction).')
     ArgsParser.add_argument('--demand-features', type=str, default= 'gene exon intron', help='select the features you want. Use space as delimiter.\n\
             gene, exon, intron in default')
+    ArgsParser.add_argument('-tss','--promoter-range', type=str,default='-2000,0', help='setting promoter range manually. Default -2000,0 (5`->3` direction).')
+    ArgsParser.add_argument('-tts','--TTS-range', type=str,default='0,2000', help='setting terminal range manually. Default 0,2000 (5`->3` direction).')
+    ArgsParser.add_argument('-5','--5SS-range', type=str,default='-3,8', help='5\' splice site range. Default -3,8 relative to 5\' exon-intron boundry (5`->3` direction).')
+    ArgsParser.add_argument('-3','--3SS-range', type=str,default='-3,3', help='3\' splice site range. Default -3,3 relative to 3\'(5`->3` direction).')
+    ArgsParser.add_argument('-ppt','--PPT-range', type=str,default='-30,-3', help='Polypyrimidine tract range. Default -20,-3 (5`->3` direction).')
 
     ArgsParser.add_argument('--split-output', action='store_true', help='Individual file for each feature.\n\
         In default output all feature records to stdout together')
@@ -60,8 +63,21 @@ def classify_features(ExonPosList,strand='+',PromoterRange=(-2000,0),TTSRange=(0
     LenSSList = len(SSList)
 
     if strand == '+':
-        promoter_pos = [PromoterRange[0] + int(popbottom), PromoterRange[1] + int(popbottom)]
-        TTS_pos = [TTSRange[0] + int(poptop), TTSRange[1] + int(poptop)]
+        # take care of promoter or TTS region out of gene body
+        exonStart = max(PromoterRange[1] + popbottom, popbottom)
+        exonEnd = min(TTSRange[0] + poptop, poptop)
+
+        # here wanna implement no overlap function, but the files of exon and intron only contain several hundred records (unresoved problems). 
+        # And no need to achieve this goal.
+
+        #exonList = [exonStart] + \
+        #    [ SSList[no] + SS5range[0] if no%2==0 else SSList[no] + SS3range[1] for no in range(LenSSList) ] \
+        #        + [exonEnd]
+
+        #intronList = [ SSList[no] + SS5range[1] if no%2==0 else SSList[no] + PPTrange[0] for no in range(LenSSList) ]
+
+        promoter_pos = [PromoterRange[0] + popbottom, PromoterRange[1] + popbottom]
+        TTS_pos = [TTSRange[0] + poptop, TTSRange[1] + poptop]
 
         intronNo = [ no+1 for no in range(int((LenSSList)/2)) ]
         exonNo = [ no+1 for no in range(int(LenExonList/2)) ]
@@ -73,8 +89,17 @@ def classify_features(ExonPosList,strand='+',PromoterRange=(-2000,0),TTSRange=(0
         ppt = [ (SSList[no]+PPTrange[0], SSList[no]+PPTrange[1]) for no in range(LenSSList) if no%2==1 ]
 
     else:
-        promoter_pos = [int(poptop) - PromoterRange[1] , int(poptop) - PromoterRange[0]]
-        TTS_pos = [int(popbottom) - TTSRange[1], int(popbottom) - TTSRange[0]]
+        exonStart = min(poptop - PromoterRange[1], popbottom)
+        exonEnd = max(popbottom - TTSRange[0], poptop)
+
+        #exonList = [exonStart] + \
+        #   [ SSList[no] - SS5range[0] if no%2==1 else SSList[no] - SS3range[1] for no in range(LenSSList) ]\
+        #         + [exonEnd]
+
+        #intronList = [ SSList[no] - SS5range[1] if no%2==1 else SSList[no] - PPTrange[0] for no in range(LenSSList) ]
+
+        promoter_pos = [poptop - PromoterRange[1] , poptop - PromoterRange[0]]
+        TTS_pos = [popbottom - TTSRange[1], popbottom - TTSRange[0]]
 
         intronNo = sorted([ no+1 for no in range(int(LenSSList/2)) ], reverse=True)
         exonNo = sorted([ no+1 for no in range(int(LenExonList/2)) ], reverse=True)
@@ -94,24 +119,38 @@ def classify_features(ExonPosList,strand='+',PromoterRange=(-2000,0),TTSRange=(0
 
     return promoter_pos, TTS_pos, intronNo, intronList, exonNo, ss5, ss3, ppt
 
-def output_stdout(ExonPosList,record_model,promoter_up,promoter_down,TTS_up,TTS_down,strand='+'):
-    promoter_pos,TTS_pos,intronNo,IntronPosList, exonNo,SS5List,SS3List, PPTList = \
-            classify_features(ExonPosList, strand, PromoterRange=(promoter_up, promoter_down), TTSRange=(TTS_up, TTS_down))
+def output_stdout(ExonPosList,record_model,promoter_up,promoter_down,TTS_up,TTS_down,SS5range=None,SS3range=None,PPTrange=None,strand='+'):
+    promoter_pos,TTS_pos,intronNo,intronList,exonNo,SS5List,SS3List, PPTList = \
+            classify_features(ExonPosList, strand, PromoterRange=(promoter_up, promoter_down), TTSRange=(TTS_up, TTS_down), \
+                SS5range=SS5range, SS3range=SS3range, PPTrange=PPTrange)
 
-    # output promoter, column 'number' means nothing
-    record_model[1] = str(promoter_pos[0])
-    record_model[2] = str(promoter_pos[1])
-    record_model[6] = 'promoter-TSS'
-    sys.stdout.write('\t'.join(record_model))
+    
+    if promoter_pos[1] == 0:
+        pass
+    else:
+        # output promoter, column 'number' means nothing
+        if promoter_pos[0] < 0:
+            promoter_pos[0] = 0
+        record_model[1] = str(promoter_pos[0])
+        record_model[2] = str(promoter_pos[1])
+        record_model[6] = 'promoter-TSS'
+        sys.stdout.write('\t'.join(record_model))
 
     # ouput exons, column 'number' represents exon number
+    exonList = ExonPosList
     record_model[6] = 'exon'
     order = 0
-    lenExonList = len(ExonPosList)
+    lenExonList = len(exonList)
     while order < lenExonList:
-        Estart = str(ExonPosList[order])
-        Eend = str(ExonPosList[order+1])
+        Estart = str(exonList[order])
+        Eend = str(exonList[order+1])
         exonno = str(exonNo[int(order/2)])
+
+        # if any operation on exon position (e.g. no overlapping), 
+        # using code below to prevernt from the condition that end pos is smaller than start one
+        #if Estart<Eend:
+        #    order += 2
+        #    continue
 
         record_model[1] = Estart
         record_model[2] = Eend
@@ -121,12 +160,17 @@ def output_stdout(ExonPosList,record_model,promoter_up,promoter_down,TTS_up,TTS_
     # output introns, column 'number' represents intron number
     if intronNo:
         order = 0
-        lenIntronList = len(IntronPosList)
+        lenIntronList = len(intronList)
         record_model[6] = 'intron'
         while order < lenIntronList:
-            Istart = str(IntronPosList[order])
-            Iend = str(IntronPosList[order+1])
+            Istart = str(intronList[order])
+            Iend = str(intronList[order+1])
             intronno = str(intronNo[int(order/2)])
+            
+            #
+            #if Istart<Iend:
+            #    order += 2
+            #    continue
 
             record_model[1] = Istart
             record_model[2] = Iend
@@ -183,29 +227,48 @@ def output_stdout(ExonPosList,record_model,promoter_up,promoter_down,TTS_up,TTS_
             order += 1
 
     # output TTS, column 'number' means nothing
-    record_model[1] = str(TTS_pos[0])
-    record_model[2] = str(TTS_pos[1])
-    record_model[3] = '0'
-    record_model[6] = 'TTS'
-    sys.stdout.write('\t'.join(record_model))
+    # drop out 0,0 record, which will cause bedtools intersect error.
+    if TTS_pos[1] == 0:
+        pass
+    else:
+        if TTS_pos[0] < 0:
+            TTS_pos[0] = 0
+        record_model[1] = str(TTS_pos[0])
+        record_model[2] = str(TTS_pos[1])
+        record_model[3] = '0'
+        record_model[6] = 'TTS'
+        sys.stdout.write('\t'.join(record_model))
 
-def output_splitfiles(ExonPosList,record_model,promoter_up,promoter_down,TTS_up,TTS_down,strand='+'):
-    promoter_pos,TTS_pos,intronNo,IntronPosList, exonNo,SS5List,SS3List, PPTList = \
-            classify_features(ExonPosList, strand, PromoterRange=(promoter_up, promoter_down), TTSRange=(TTS_up, TTS_down))
+def output_splitfiles(ExonPosList,record_model,promoter_up,promoter_down,TTS_up,TTS_down,SS5range=None,SS3range=None,PPTrange=None,strand='+'):
+    promoter_pos,TTS_pos,intronNo,intronPosList,exonNo,SS5List,SS3List, PPTList = \
+            classify_features(ExonPosList, strand, PromoterRange=(promoter_up, promoter_down), TTSRange=(TTS_up, TTS_down), \
+                SS5range=SS5range, SS3range=SS3range, PPTrange=PPTrange)
 
     # output promoter, column 'number' means nothing
-    record_model[1] = str(promoter_pos[0])
-    record_model[2] = str(promoter_pos[1])
-    record_model[6] = 'promoter-TSS'
-    promoter_fo.write('\t'.join(record_model))
+    # drop out 0,0 record, which will cause bedtools intersect error.
+    if promoter_pos[1] == 0:
+        pass
+    else:
+        if promoter_pos[0] < 0:
+            promoter_pos[0] = 0
+        record_model[1] = str(promoter_pos[0])
+        record_model[2] = str(promoter_pos[1])
+        record_model[6] = 'promoter-TSS'
+        promoter_fo.write('\t'.join(record_model))
+
     # ouput exons, column 'number' represents exon number
+    exonList = ExonPosList
     record_model[6] = 'exon'
     order = 0
-    lenExonList = len(ExonPosList)
+    lenExonList = len(exonList)
     while order < lenExonList:
-        Estart = ExonPosList[order]
-        Eend = ExonPosList[order+1]
+        Estart = exonList[order]
+        Eend = exonList[order+1]
         exonno = exonNo[int(order/2)]
+
+        #if Estart<Eend:
+        #    order += 2
+        #    continue
 
         record_model[1] = str(Estart)
         record_model[2] = str(Eend)
@@ -217,11 +280,16 @@ def output_splitfiles(ExonPosList,record_model,promoter_up,promoter_down,TTS_up,
     # output introns, column 'number' represents intron number
     if intronNo:
         order = 0
-        lenIntronList = len(IntronPosList)
+        lenIntronList = len(intronPosList)
         record_model[6] = 'intron'
         while order < lenIntronList:
-            Istart = IntronPosList[order]
-            Iend = IntronPosList[order+1]
+            Istart = intronPosList[order]
+            Iend = intronPosList[order+1]
+
+            #if Istart<Iend:
+            #    order += 2
+            #    continue
+
             intronno = intronNo[int(order/2)]
             record_model[1] = str(Istart)
             record_model[2] = str(Iend)
@@ -281,29 +349,47 @@ def output_splitfiles(ExonPosList,record_model,promoter_up,promoter_down,TTS_up,
 
             ppt_fo.write('\t'.join(record_model))
 
-    # output TTS, column 'number' means nothing
-    record_model[1] = str(TTS_pos[0])
-    record_model[2] = str(TTS_pos[1])
-    record_model[3] = '0'
-    record_model[6] = 'TTS'
-    TTS_fo.write('\t'.join(record_model))
+    # drop out 0,0 record, which will cause bedtools intersect error.
+    if TTS_pos[1] == 0:
+        pass
+    else:
+        # output TTS, column 'number' means nothing
+        if TTS_pos[0] < 0:
+            TTS_pos[0] = 0
+        record_model[1] = str(TTS_pos[0])
+        record_model[2] = str(TTS_pos[1])
+        record_model[3] = '0'
+        record_model[6] = 'TTS'
+        TTS_fo.write('\t'.join(record_model))
 
 
-
+#### parse parameters ####
 ArgsDict = get_args()
 gtf = ArgsDict['gtf']
+features = ArgsDict['demand_features'].split(' ')
+
 PromoterRange = ArgsDict['promoter_range']
 TTSRange = ArgsDict['TTS_range']
+SS5Range = ArgsDict['5SS_range']
+SS3Range = ArgsDict['3SS_range']
+PPTRange = ArgsDict['PPT_range']
+
 SplitOutput = ArgsDict['split_output']
 prefix = ArgsDict['split_prefix']
-verbose = ArgsDict['verbose']
 unique = ArgsDict['uniq']
-features = ArgsDict['demand_features'].split(' ')
+
+verbose = ArgsDict['verbose']
 
 promoter_up = int(PromoterRange.split(',')[0].strip(' '))
 promoter_down = int(PromoterRange.split(',')[1].strip(' '))
 TTS_up = int(TTSRange.split(',')[0].strip(' '))
 TTS_down = int(TTSRange.split(',')[1].strip(' '))
+SS5up = int(SS5Range.split(',')[0].strip(' '))
+SS5down = int(SS5Range.split(',')[1].strip(' '))
+SS3up = int(SS3Range.split(',')[0].strip(' '))
+SS3down = int(SS3Range.split(',')[1].strip(' '))
+PPTup = int(PPTRange.split(',')[0].strip(' '))
+PPTdown = int(PPTRange.split(',')[1].strip(' '))
 
 # split files to save result
 if SplitOutput:
@@ -339,14 +425,7 @@ if SplitOutput:
     FoList = [prefix+suffix+'.bed' for suffix in ['.exon','.intron','.5ss','.3ss','.gene','.PPT','.promoter','.TTS']]
 else:pass
 
-# define splice site range
-ss5upE = 3
-ss5downI = 8
-ss3upI = 3
-ss3downE = 3
-PPT = 20
-
-# init useful variables
+# init variables
 ExonPosList = []
 strand = '+'
 chrom = ''
@@ -354,6 +433,9 @@ Gid = ''
 Gbiotype = ''
 Tid = ''
 
+####################
+# main function body
+####################
 with open(gtf, 'r') as gtffo:
     line = gtffo.readline()
     feature = ''
@@ -431,9 +513,11 @@ with open(gtf, 'r') as gtffo:
         record_model = [chrom,0,0,'0','.',strand,feature,Gid,Gbiotype,Tid+'\n']
 
         if SplitOutput:
-            output_splitfiles(ExonPosList, record_model, promoter_up, promoter_down, TTS_up, TTS_down, strand=strand)
+            output_splitfiles(ExonPosList, record_model, promoter_up, promoter_down, TTS_up, TTS_down, \
+                SS5range=(SS5up, SS5down), SS3range=(SS3up, SS3down), PPTrange=(PPTup, PPTdown),strand=strand)
         else:
-            output_stdout(ExonPosList, record_model, promoter_up, promoter_down, TTS_up, TTS_down,strand=strand)
+            output_stdout(ExonPosList, record_model, promoter_up, promoter_down, TTS_up, TTS_down, \
+                SS5range=(SS5up, SS5down), SS3range=(SS3up, SS3down), PPTrange=(PPTup, PPTdown), strand=strand)
         # clear exon position list
         ExonPosList = []
         # keep basic information
