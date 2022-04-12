@@ -475,6 +475,9 @@ with open(gtf, 'r') as gtffo:
             parser = GTFinfo(line)
             feature = parser.return_feature()
 
+            Gid_n = parser.return_info('gene_id')
+            Gbiotype_n = parser.return_info('gene_biotype')
+
             if feature == 'exon':
                 start,end = parser.exon_info()
                 ExonPosList.append(start)
@@ -482,8 +485,6 @@ with open(gtf, 'r') as gtffo:
                 line = gtffo.readline();continue
 
             if feature == 'gene':
-                Gid_n = parser.return_info('gene_id')
-                Gbiotype_n = parser.return_info('gene_biotype')
                 Gstart_n, Gend_n = parser.exon_info()
                 chrom_n, strand_n = parser.basic_info()
                 gene_record = [chrom_n, Gstart_n, Gend_n, '0', '.', strand_n, 'gene', Gid_n, Gbiotype_n, '.\n']
