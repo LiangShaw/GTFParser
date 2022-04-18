@@ -10,7 +10,7 @@ class GTFinfo:
 
         info_ls = extra_info.strip().split('"; ')
         #sys.stderr.write(str(info_ls)+'\n')
-        self.info_dict = { f.split('"')[0].strip(' '):f.split('"')[1] for f in info_ls }
+        self.info_dict = { f.split('"')[0].strip(' '):f.split('"')[1] for f in info_ls if '"' in f }
         # gene_id, transcript_id, gene_biotype, exon_number
 
     def return_feature(self):

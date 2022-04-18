@@ -6,7 +6,7 @@ pythonVersion = eval('.'.join(sys.version.split('.')[:2]))
 def get_args():
     ArgsParser = argparse.ArgumentParser(
         prog='GTFParser',
-        usage='parse GTF file to get BED format files of different features',
+        usage='parse GTF file to get BED format files of different genomic features',
         description=
         '''
  _______ _______ ______ ______         _______  ______ ________ ______
@@ -22,19 +22,19 @@ def get_args():
     ArgsParser.add_argument('-g','--gtf',
         help='provide a gtf file', required=True
     )
-    ArgsParser.add_argument('--demand-features', type=str, default= 'gene exon intron', help='select the features you want. Use space as delimiter.\n\
+    ArgsParser.add_argument('--demand-features', type=str, nargs='*',default= 'gene exon intron', help='select the features you want. Use space as delimiter.\n\
             gene, exon, intron in default')
     ArgsParser.add_argument('-tss','--promoter-range', type=str,default='-2000,0', help='setting promoter range manually. Default -2000,0 (5`->3` direction).')
     ArgsParser.add_argument('-tts','--TTS-range', type=str,default='0,2000', help='setting terminal range manually. Default 0,2000 (5`->3` direction).')
     ArgsParser.add_argument('-5','--5SS-range', type=str,default='-3,8', help='5\' splice site range. Default -3,8 relative to 5\' exon-intron boundry (5`->3` direction).')
     ArgsParser.add_argument('-3','--3SS-range', type=str,default='-3,3', help='3\' splice site range. Default -3,3 relative to 3\'(5`->3` direction).')
     ArgsParser.add_argument('-ppt','--PPT-range', type=str,default='-30,-3', help='Polypyrimidine tract range. Default -20,-3 (5`->3` direction).')
-
     ArgsParser.add_argument('--split-output', action='store_true', help='Individual file for each feature.\n\
         In default output all feature records to stdout together')
     ArgsParser.add_argument('--split-prefix', type=str, default='GTF', help='prefix of individual file. Only function when spliting output')
     ArgsParser.add_argument('-u', '--uniq', action='store_true', help='Unique all individual files to minimize file size.\n\
         Only function when spliting output. In default not unique.')
+    ArgsParser.add_argument('-rd','--require-description',metavar='target_attributes', type=str, nargs='*',help='required descriptions in 10th column. Use space to separate multi descriptions.')
     ArgsParser.add_argument('--no-overlapping',action='store_true',help='Except feature \"gene\", no overlapping region exists between any two features ')
     ArgsParser.add_argument('-v','--verbose', action='store_true',help='print time information')
     # show version
@@ -362,6 +362,14 @@ def output_splitfiles(ExonPosList,record_model,promoter_up,promoter_down,TTS_up,
         record_model[6] = 'TTS'
         TTS_fo.write('\t'.join(record_model))
 
+def return_descripts(required_list, parser):
+    descripts = []
+    for d in required_list:
+        try:
+            d_val = parser.return_info(d)
+            descripts.append(d_val)
+        except:pass
+    return descripts
 
 #### parse parameters ####
 ArgsDict = get_args()
@@ -379,6 +387,7 @@ prefix = ArgsDict['split_prefix']
 unique = ArgsDict['uniq']
 
 verbose = ArgsDict['verbose']
+attributes = ArgsDict['require_description'] # .split(' ')
 
 promoter_up = int(PromoterRange.split(',')[0].strip(' '))
 promoter_down = int(PromoterRange.split(',')[1].strip(' '))
@@ -393,6 +402,10 @@ PPTdown = int(PPTRange.split(',')[1].strip(' '))
 
 # split files to save result
 if SplitOutput:
+    if prefix.split('/')[-1] != '':
+        pass
+    else:
+        prefix = prefix + 'GTF'
     exon_fo = open(prefix+'.exon.bed','w')
     intron_fo = open(prefix+'.intron.bed','w')
     ss5_fo = open(prefix+'.5ss.bed','w')
@@ -402,15 +415,15 @@ if SplitOutput:
     promoter_fo = open(prefix+'.promoter.bed','w')
     TTS_fo = open(prefix+'.TTS.bed','w')
     if verbose:
-        sys.stderr.write('''Starting to write results in following files:\n
-{1}.gene.bed\n
-{1}.exon.bed\n
-{1}.intron.bed\n
-{1}.5ss.bed\n
-{1}.3ss.bed\n
-{1}.PPT.bed\n
-{1}.promoter.bed\n
-{1}.TTS.bed\n''')
+        sys.stderr.write('''Starting to write results in following files:
+{0}.gene.bed
+{0}.exon.bed
+{0}.intron.bed
+{0}.5ss.bed
+{0}.3ss.bed
+{0}.PPT.bed
+{0}.promoter.bed
+{0}.TTS.bed\n'''.format(prefix))
 
     FoDict = {
         'exon': exon_fo,
@@ -429,8 +442,15 @@ else:pass
 ExonPosList = []
 strand = '+'
 chrom = ''
-Gid = ''
-Gbiotype = ''
+
+if attributes:
+    descripts_keys = [ d for d in attributes]
+else:
+    descripts_keys = []
+
+descripts = []
+#Gid = ''
+#Gbiotype = ''
 Tid = ''
 
 ####################
@@ -452,12 +472,13 @@ with open(gtf, 'r') as gtffo:
             break
 
         if feature == 'gene':
+            re_descripts = return_descripts(descripts_keys, parser)
             Gid = parser.return_info('gene_id')
-            Gbiotype = parser.return_info('gene_biotype')
+            #Gbiotype = parser.return_info('gene_biotype')
             # output gene record
             Gstart, Gend = parser.exon_info()
             chrom, strand = parser.basic_info()
-            gene_record = [chrom, Gstart, Gend, '0', '.', strand, 'gene', Gid, Gbiotype, '.\n']
+            gene_record = [chrom, Gstart, Gend, '0', '.', strand, feature, Gid] + re_descripts + ['.\n']
             if SplitOutput:
                 gene_fo.write('\t'.join(gene_record))
             else:
@@ -475,8 +496,10 @@ with open(gtf, 'r') as gtffo:
             parser = GTFinfo(line)
             feature = parser.return_feature()
 
+            re_descripts = return_descripts(descripts_keys, parser)
+
             Gid_n = parser.return_info('gene_id')
-            Gbiotype_n = parser.return_info('gene_biotype')
+            #Gbiotype_n = parser.return_info('gene_biotype')
 
             if feature == 'exon':
                 start,end = parser.exon_info()
@@ -487,7 +510,7 @@ with open(gtf, 'r') as gtffo:
             if feature == 'gene':
                 Gstart_n, Gend_n = parser.exon_info()
                 chrom_n, strand_n = parser.basic_info()
-                gene_record = [chrom_n, Gstart_n, Gend_n, '0', '.', strand_n, 'gene', Gid_n, Gbiotype_n, '.\n']
+                gene_record = [chrom_n, Gstart_n, Gend_n, '0', '.', strand_n, feature, Gid_n] + re_descripts + ['.\n']
                 if SplitOutput:
                     gene_fo.write('\t'.join(gene_record))
                 else:
@@ -511,7 +534,9 @@ with open(gtf, 'r') as gtffo:
 
         # pattern: chrom, start, end, number,., strand, feature type, gene id, gene biotype, transcript id
         # intronNo_for5ss, intronNo_for3ss, intronNo_forPPT = intronNo, intronNo, intronNo
-        record_model = [chrom,0,0,'0','.',strand,feature,Gid,Gbiotype,Tid+'\n']
+        # re_descripts = return_descripts(descripts_keys, parser)
+        record_model = [chrom,0,0,'0','.',strand,feature,Gid] + re_descripts + [Tid+'\n']
+        # record_model = [chrom,0,0,'0','.',strand,feature,Gid,Gbiotype,Tid+'\n']
 
         if SplitOutput:
             output_splitfiles(ExonPosList, record_model, promoter_up, promoter_down, TTS_up, TTS_down, \
@@ -526,7 +551,7 @@ with open(gtf, 'r') as gtffo:
             first_gene = 0
             pass
         else:
-            strand, chrom, Gid, Gbiotype, Tid = strand_n, chrom_n, Gid_n, Gbiotype_n, Tid_n
+            strand, chrom, Gid, Tid = strand_n, chrom_n, Gid_n, Tid_n
         # exit when reaching bottom
         if last_line:break
         line = gtffo.readline()
