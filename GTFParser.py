@@ -17,18 +17,18 @@ def get_args():
 |_______|  |_|  |_|    |_|   /_/-__-\_\\\_|  \_\|______|_______|_|  \_\ ''',
         formatter_class = argparse.RawDescriptionHelpFormatter,
         add_help=True,
-        epilog='This is a basic draft to run with specific gtf format. Welcome any useful advice! Let\'s strengthen it together'
+        epilog='Welcome any useful advice! LiangShaw'
     )
     ArgsParser.add_argument('-g','--gtf',
         help='provide a gtf file', required=True
     )
     ArgsParser.add_argument('--demand-features', type=str, nargs='*',default= 'gene exon intron', help='select the features you want. Use space as delimiter.\n\
             gene, exon, intron in default')
-    ArgsParser.add_argument('-tss','--promoter-range', type=str,default='-2000,0', help='setting promoter range manually. Default -2000,0 (5`->3` direction).')
-    ArgsParser.add_argument('-tts','--TTS-range', type=str,default='0,2000', help='setting terminal range manually. Default 0,2000 (5`->3` direction).')
-    ArgsParser.add_argument('-5','--5SS-range', type=str,default='-3,8', help='5\' splice site range. Default -3,8 relative to 5\' exon-intron boundry (5`->3` direction).')
-    ArgsParser.add_argument('-3','--3SS-range', type=str,default='-3,3', help='3\' splice site range. Default -3,3 relative to 3\'(5`->3` direction).')
-    ArgsParser.add_argument('-ppt','--PPT-range', type=str,default='-30,-3', help='Polypyrimidine tract range. Default -20,-3 (5`->3` direction).')
+    ArgsParser.add_argument('-tss','--promoter-range', type=str,default='(-2000,0)', help='setting promoter range manually. Default [-2000,0] (5`->3` direction).')
+    ArgsParser.add_argument('-tts','--TTS-range', type=str,default='(0,2000)', help='setting terminal range manually. Default [0,2000] (5`->3` direction).')
+    ArgsParser.add_argument('-5','--5SS-range', type=str,default='(-3,8)', help='5\' splice site range. Default [-3,8] relative to 5\' exon-intron boundry (5`->3` direction).')
+    ArgsParser.add_argument('-3','--3SS-range', type=str,default='(-3,3)', help='3\' splice site range. Default [-3,3] relative to 3\'(5`->3` direction).')
+    ArgsParser.add_argument('-ppt','--PPT-range', type=str,default='(-30,-3)', help='Polypyrimidine tract range. Default [-20,-3] (5`->3` direction).')
     ArgsParser.add_argument('--split-output', action='store_true', help='Individual file for each feature.\n\
         In default output all feature records to stdout together')
     ArgsParser.add_argument('--split-prefix', type=str, default='GTF', help='prefix of individual file. Only function when spliting output')
@@ -389,16 +389,27 @@ unique = ArgsDict['uniq']
 verbose = ArgsDict['verbose']
 attributes = ArgsDict['require_description'] # .split(' ')
 
-promoter_up = int(PromoterRange.split(',')[0].strip(' '))
-promoter_down = int(PromoterRange.split(',')[1].strip(' '))
-TTS_up = int(TTSRange.split(',')[0].strip(' '))
-TTS_down = int(TTSRange.split(',')[1].strip(' '))
-SS5up = int(SS5Range.split(',')[0].strip(' '))
-SS5down = int(SS5Range.split(',')[1].strip(' '))
-SS3up = int(SS3Range.split(',')[0].strip(' '))
-SS3down = int(SS3Range.split(',')[1].strip(' '))
-PPTup = int(PPTRange.split(',')[0].strip(' '))
-PPTdown = int(PPTRange.split(',')[1].strip(' '))
+#promoter_up = int(PromoterRange.split(',')[0].strip(' '))
+#promoter_down = int(PromoterRange.split(',')[1].strip(' '))
+#TTS_up = int(TTSRange.split(',')[0].strip(' '))
+#TTS_down = int(TTSRange.split(',')[1].strip(' '))
+#SS5up = int(SS5Range.split(',')[0].strip(' '))
+#SS5up = int(SS5Range.split(',')[0].strip(' '))
+#SS3up = int(SS3Range.split(',')[0].strip(' '))
+#SS3down = int(SS3Range.split(',')[1].strip(' '))
+#PPTup = int(PPTRange.split(',')[0].strip(' '))
+#PPTdown = int(PPTRange.split(',')[1].strip(' '))
+
+promoter_up = eval(PromoterRange)[0]
+promoter_down = eval(PromoterRange)[1]
+TTS_up = eval(TTSRange)[0]
+TTS_down = eval(TTSRange)[1]
+SS5up = eval(SS5Range)[0]
+SS5down = eval(SS5Range)[1]
+SS3up = eval(SS3Range)[0]
+SS3down = eval(SS3Range)[1]
+PPTup = eval(PPTRange)[0]
+PPTdown = eval(PPTRange)[1]
 
 # split files to save result
 if SplitOutput:
@@ -516,10 +527,10 @@ with open(gtf, 'r') as gtffo:
                 else:
                     sys.stdout.write('\t'.join(gene_record))
                 line = gtffo.readline();continue
-            elif feature == 'transcript':
+            elif feature == 'transcript' or feature.endswith('RNA'): # in some gtf version, various RNA features replace the transcript
                 Tid_n = parser.return_info('transcript_id')
                 chrom_n,strand_n = parser.basic_info()
-            elif feature != 'exon': ## skip CDS, stop codon and other features.
+            elif feature != 'exon': ## skip CDS, stop codon, UTR, and other features.
                 line = gtffo.readline();continue
 
             if ExonPosList == []: # no exon in this gene
@@ -565,5 +576,5 @@ with open(gtf, 'r') as gtffo:
                 sys.stderr.write('''Start unique files...\n''')
             for file in FoList:
                 os.system('sort -k1,1 -k2,2n -k3,3n -k6,6 -k8,8 -u {0} > {0}.tmp;mv {0}.tmp {0}'.format(file))
-            if verbose:
-                sys.stderr.write('''All done''')
+    if verbose:
+        sys.stderr.write('''All done. GoodBye!''')
