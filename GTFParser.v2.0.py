@@ -54,7 +54,7 @@ def init_list():
 #
 ################################
 
-def classify_features(ExonPosList,strand='+',SS5range=(-3,8),SS3range=(-3,3),PPTrange=(-20,-3)):
+def classify_features(ExonPosList,strand='+',PromoterRange=(-1000,100),TerminatorRange=(-100,1000),SS5range=(-3,8),SS3range=(-3,3),PPTrange=(-20,-3)):
     LenExonList = len(ExonPosList)
 
     popbottom = ExonPosList[0]
@@ -70,6 +70,9 @@ def classify_features(ExonPosList,strand='+',SS5range=(-3,8),SS3range=(-3,3),PPT
 
         TSS_pos = [ popbottom-1, popbottom]
         TTS_pos = [poptop-1, poptop]
+        
+        promoter_pos = [PromoterRange[0] + popbottom, PromoterRange[1] + popbottom]
+        terminator_pos = [TerminatorRange[0] + poptop, TerminatorRange[1] + poptop]
 
         intronNo = [ no+1 for no in range(int((LenSSList)/2)) ]
         exonNo = [ no+1 for no in range(int(LenExonList/2)) ]
@@ -83,6 +86,9 @@ def classify_features(ExonPosList,strand='+',SS5range=(-3,8),SS3range=(-3,3),PPT
     else:
         TSS_pos = [poptop-1, poptop]
         TTS_pos = [popbottom-1, popbottom]
+        
+        promoter_pos = [poptop - PromoterRange[1] , poptop - PromoterRange[0]]
+        terminator_pos = [poptop - TerminatorRange[1] , poptop - TerminatorRange[0]]
 
         intronNo = sorted([ no+1 for no in range(int(LenSSList/2)) ], reverse=True)
         exonNo = sorted([ no+1 for no in range(int(LenExonList/2)) ], reverse=True)
@@ -100,17 +106,37 @@ def classify_features(ExonPosList,strand='+',SS5range=(-3,8),SS3range=(-3,3),PPT
     else:
         intronList = SSList
 
-    return TSS_pos, TTS_pos, intronNo, intronList, exonNo, ss5, ss3, ppt
+    return TSS_pos, TTS_pos, intronNo, intronList, exonNo, ss5, ss3, ppt, promoter_pos, terminator_pos
 
 def output_stdout(ExonPosList,record_model,promoter_up,promoter_down,TTS_up,TTS_down,SS5range=None,SS3range=None,PPTrange=None,strand='+'):
-    TSS_pos,TTS_pos,intronNo,intronList,exonNo,SS5List,SS3List, PPTList = \
-            classify_features(ExonPosList, strand, SS5range=SS5range, SS3range=SS3range, PPTrange=PPTrange)
+    TSS_pos,TTS_pos,intronNo,intronList,exonNo,SS5List,SS3List, PPTList, promoter_pos, terminator_pos = \
+            classify_features(ExonPosList, strand, PromoterRange=(promoter_up, promoter_down), TerminatorRange=(TTS_up, TTS_down),
+                              SS5range=SS5range, SS3range=SS3range, PPTrange=PPTrange)
 
     # TSS
     record_model[1] = str(TSS_pos[0])
     record_model[2] = str(TSS_pos[1])
     record_model[6] = 'TSS'
     sys.stdout.write('\t'.join(record_model))
+    
+    # promoter
+    if promoter_pos[1] < 0:pass
+    else:
+        if promoter_pos[0] < 0: 
+            promoter_pos[0] = 0
+        else:pass
+        record_model[1] = str(promoter_pos[0])
+        record_model[2] = str(promoter_pos[1])
+        record_model[6] = 'promoter'
+        sys.stdout.write('\t'.join(record_model))
+    
+    # terminator
+    if terminator_pos[0] < 0:pass
+    else:
+        record_model[1] = str(terminator_pos[0])
+        record_model[2] = str(terminator_pos[1])
+        record_model[6] = 'terminator'
+        sys.stdout.write('\t'.join(record_model))
 
     # ouput exons, column 'number' represents exon number
     exonList = ExonPosList
@@ -122,7 +148,7 @@ def output_stdout(ExonPosList,record_model,promoter_up,promoter_down,TTS_up,TTS_
         Eend = str(exonList[order+1])
         exonno = str(exonNo[int(order/2)])
 
-        # if any operation on exon position (e.g. no overlapping), 
+        # if any operation on exon position (e.g. no overlapping),
         # using code below to prevernt from the condition that end pos is smaller than start one
         #if Estart<Eend:
         #    order += 2
@@ -213,17 +239,37 @@ def output_stdout(ExonPosList,record_model,promoter_up,promoter_down,TTS_up,TTS_
     sys.stdout.write('\t'.join(record_model))
 
 def output_splitfiles(ExonPosList,record_model,promoter_up,promoter_down,TTS_up,TTS_down,SS5range=None,SS3range=None,PPTrange=None,strand='+'):
-    TSS_pos,TTS_pos,intronNo,intronPosList,exonNo,SS5List,SS3List, PPTList = \
-            classify_features(ExonPosList, strand, SS5range=SS5range, SS3range=SS3range, PPTrange=PPTrange)
+    TSS_pos,TTS_pos,intronNo,intronPosList,exonNo,SS5List,SS3List,PPTList,promoter_pos,terminator_pos = \
+            classify_features(ExonPosList, strand, PromoterRange=(promoter_up, promoter_down), TerminatorRange=(TTS_up, TTS_down),
+                              SS5range=SS5range, SS3range=SS3range, PPTrange=PPTrange)
 
     # output promoter, column 'number' means nothing
     # drop out 0,0 record, which will cause bedtools intersect error.
-    
+
     # TSS
     record_model[1] = str(TSS_pos[0])
     record_model[2] = str(TSS_pos[1])
     record_model[6] = 'TSS'
     TSS_fo.write('\t'.join(record_model))
+
+    # promoter
+    if promoter_pos[1] < 0:pass
+    else:
+        if promoter_pos[0] < 0: 
+            promoter_pos[0] = 0
+        else:pass
+        record_model[1] = str(promoter_pos[0])
+        record_model[2] = str(promoter_pos[1])
+        record_model[6] = 'promoter'
+        pro_fo.write('\t'.join(record_model))
+        
+    # terminator
+    if terminator_pos[0] < 0:pass
+    else:
+        record_model[1] = str(terminator_pos[0])
+        record_model[2] = str(terminator_pos[1])
+        record_model[6] = 'terminator'
+        ter_fo.write('\t'.join(record_model))
 
     # ouput exons, column 'number' represents exon number
     exonList = ExonPosList
@@ -379,6 +425,8 @@ if SplitOutput:
     ppt_fo = open(prefix+'.PPT.bed','w')
     TSS_fo = open(prefix+'.TSS.bed','w')
     TTS_fo = open(prefix+'.TTS.bed','w')
+    pro_fo = open(prefix+'.promoter.bed','w')
+    ter_fo = open(prefix+'.terminator.bed','w')
     if verbose:
         sys.stderr.write('''Starting to write results in following files:
 {0}.gene.bed
@@ -398,7 +446,9 @@ if SplitOutput:
         'gene':gene_fo,
         'ppt':ppt_fo,
         'TSS':TSS_fo,
-        'TTS':TTS_fo
+        'TTS':TTS_fo,
+        'promoter':pro_fo,
+        'terminator':ter_fo
     }
     FoList = [prefix+suffix+'.bed' for suffix in ['.exon','.intron','.5ss','.3ss','.gene','.PPT','.TSS','.TTS']]
 else:pass
