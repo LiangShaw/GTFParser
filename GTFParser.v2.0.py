@@ -3,10 +3,14 @@ import os, sys
 import argparse
 pythonVersion = eval('.'.join(sys.version.split('.')[:2]))
 
+### 本项目中 intron，exon 的输出，与 hisat2 的 extract_splice_sites.py/extract_exons.py 的输出有较大差距，脚本内部存在问题
+### 主要问题体现在 strand 的错误，凭空出现的 intron/exon 以及遗漏了 intron/exon
+### 暂停使用
+
 def get_args():
     ArgsParser = argparse.ArgumentParser(
         prog='GTFParser',
-        usage='parse GTF file to get BED format files of different genomic features',
+        usage='parse GTF file to get BED format files of different genomic features.',
         description=
         '''
  _______ _______ ______ ______         _______  ______ ________ ______
@@ -24,8 +28,8 @@ def get_args():
     )
     ArgsParser.add_argument('--demand-features', type=str, nargs='*',default= 'gene exon intron', help='select the features you want. Use space as delimiter.\n\
             gene, exon, intron in default')
-    ArgsParser.add_argument('-tss','--promoter-range', type=str,default='(-2000,0)', help='setting promoter range manually. Default [-2000,0] (5`->3` direction).')
-    ArgsParser.add_argument('-tts','--TTS-range', type=str,default='(0,2000)', help='setting terminal range manually. Default [0,2000] (5`->3` direction).')
+    ArgsParser.add_argument('-pro','--promoter-range', type=str,default='(-1000,100)', help='setting promoter range manually. Default [-1000,100] (5`->3` direction).')
+    ArgsParser.add_argument('-tts','--TTS-range', type=str,default='(-100,1000)', help='setting terminal range manually. Default [-100,1000] (5`->3` direction).')
     ArgsParser.add_argument('-5','--5SS-range', type=str,default='(-3,8)', help='5\' splice site range. Default [-3,8] relative to 5\' exon-intron boundry (5`->3` direction).')
     ArgsParser.add_argument('-3','--3SS-range', type=str,default='(-3,3)', help='3\' splice site range. Default [-3,3] relative to 3\'(5`->3` direction).')
     ArgsParser.add_argument('-ppt','--PPT-range', type=str,default='(-30,-3)', help='Polypyrimidine tract range. Default [-20,-3] (5`->3` direction).')
